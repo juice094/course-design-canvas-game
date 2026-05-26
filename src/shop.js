@@ -80,7 +80,7 @@ class ShopItem {
         };
     }
 
-    draw(ctx, canAfford) {
+    draw(ctx, canAfford, playerInRange) {
         const x = this.x - this.width / 2;
         const y = this.y - this.height / 2;
 
@@ -90,10 +90,20 @@ class ShopItem {
         ctx.fillStyle = this.purchased ? '#2E7D32' : (canAfford ? '#37474F' : '#263238');
         ctx.fillRect(x, y, this.width, this.height);
 
-        // 边框
-        ctx.strokeStyle = canAfford ? '#FFD700' : '#555';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, this.width, this.height);
+        // 边框：玩家在范围内时高亮
+        if (playerInRange && !this.purchased) {
+            ctx.strokeStyle = '#00E5FF';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x - 2, y - 2, this.width + 4, this.height + 4);
+
+            ctx.strokeStyle = '#FFF';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, this.width, this.height);
+        } else {
+            ctx.strokeStyle = canAfford ? '#FFD700' : '#555';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, this.width, this.height);
+        }
 
         // 名称
         ctx.fillStyle = this.purchased ? '#81C784' : '#FFF';
@@ -199,6 +209,12 @@ class Shop {
 
         this.timer += dt;
 
+        // 主动关闭（ESC / P / Enter）
+        if (input.isPressed(GameAction.PAUSE) || input.isPressed(GameAction.CONFIRM)) {
+            this.close();
+            return true;
+        }
+
         // 商人走入动画
         if (this.merchantY < this.merchantTargetY) {
             this.merchantY += this.merchantSpeed * dt;
@@ -261,7 +277,7 @@ class Shop {
     }
 
     /** 绘制 */
-    draw(ctx, playerCoins) {
+    draw(ctx, playerCoins, player) {
         if (!this.isOpen) return;
 
         const cx = 384;
@@ -296,12 +312,16 @@ class Shop {
 
         // 商品
         for (const item of this.items) {
-            item.draw(ctx, playerCoins >= item.price && !item.purchased);
+            const playerInRange = Utils.aabbIntersect(player.boundingBox, item.boundingBox);
+            item.draw(ctx, playerCoins >= item.price && !item.purchased, playerInRange);
         }
 
         // 操作提示
+        ctx.fillStyle = '#4FC3F7';
+        ctx.font = 'bold 14px "Courier New", monospace';
+        ctx.fillText('WASD 移动到商品上 → 按 Space 购买', cx, 510);
         ctx.fillStyle = '#AAA';
         ctx.font = '12px "Courier New", monospace';
-        ctx.fillText('走到商品上 + 按 Space 购买', cx, 500);
+        ctx.fillText('ESC / Enter 关闭商店', cx, 532);
     }
 }

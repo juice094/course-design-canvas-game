@@ -140,7 +140,7 @@ class GameEngine {
 
         // 3. 波次管理器更新
         const waveResult = this.waveManager.update(dt, this);
-        if (waveResult.waveComplete) {
+        if (waveResult.waveComplete && !this.isInShop) {
             this.waveNum++;
             if (waveResult.shouldShop) {
                 // Phase 4: 进入商店
@@ -371,7 +371,7 @@ class GameEngine {
 
         // 7. 商店（覆盖层）
         if (this.isInShop) {
-            this.shop.draw(ctx, this.coins);
+            this.shop.draw(ctx, this.coins, this.player);
         }
 
         ctx.restore();

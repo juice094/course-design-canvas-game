@@ -61,13 +61,9 @@ class Enemy {
         this.flying = stats.flying || false;
 
         // Spikey: 变身机制
-        this.isSpikeyTransformed = false;
         this.spikeyTargetX = 0;
         this.spikeyTargetY = 0;
         this.spikeyTransformed = false;  // 已变身状态
-        if (this.type === EnemyType.SPIKEY) {
-            this._pickSpikeyTarget(map);
-        }
 
         this.queuedForDeletion = false;
     }
@@ -253,6 +249,11 @@ class Enemy {
     }
 
     _updateSpikey(dt, map) {
+        // 延迟初始化目标（构造函数中没有 map）
+        if (this.spikeyTargetX === 0 && this.spikeyTargetY === 0) {
+            this._pickSpikeyTarget(map);
+        }
+
         const dx = this.spikeyTargetX - this.x;
         const dy = this.spikeyTargetY - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
