@@ -29,6 +29,21 @@ class GameEngine {
         this.waveNum = 0;
         this.isGameOver = false;
 
+        // Phase 7: 本局统计
+        this.stats = {
+            shotsFired: 0,
+            shotsHit: 0,
+            enemiesKilled: 0,
+            coinsCollected: 0,
+            powerupsCollected: 0,
+            damageTaken: 0,
+            timeAlive: 0
+        };
+
+        // Phase 7: 屏幕震动
+        this.shakeTimer = 0;
+        this.shakeIntensity = 0;
+
         // Phase 3: 波次管理器
         this.waveManager = new WaveManager();
         this.waveManager.startWave(1);
@@ -61,11 +76,53 @@ class GameEngine {
         this.shop = new Shop();
         this.isInShop = false;
         this.audio.stopBGM();
+
+        // Phase 7: 重置统计
+        this.stats = {
+            shotsFired: 0,
+            shotsHit: 0,
+            enemiesKilled: 0,
+            coinsCollected: 0,
+            powerupsCollected: 0,
+            damageTaken: 0,
+            timeAlive: 0
+        };
+        this.shakeTimer = 0;
+        this.shakeIntensity = 0;
     }
 
-    /** 主更新 */
+    /**
+     * 主更新循环。
+     *
+     * 更新顺序（与 C# 原版一致）：
+     * 1. 统计计时器（timeAlive、shakeTimer）
+     * 2. 玩家输入与移动
+     * 3. 子弹弹道更新
+     * 4. 波次管理器（生成新敌人 / 检测波次完成）
+     * 5. 商店状态更新（若处于商店）
+     * 6. 敌人 AI 更新
+     * 7. 道具倒计时更新
+     * 8. 粒子物理更新
+     * 9. 碰撞检测（子弹-地图、子弹-敌人、玩家-敌人、玩家-道具）
+     * 10. 清理死亡实体
+     *
+     * @param {number} dt — 时间步长（秒）
+     * @param {InputManager} input
+     */
     update(dt, input) {
         if (this.isGameOver) return;
+
+        // Phase 7: 统计存活时间
+        this.stats.timeAlive += dt;
+
+        // Phase 7: 屏幕震动衰减
+        if (this.shakeTimer > 0) {
+            this.shakeTimer -= dt;
+            if (this.shakeTimer < 0) {
+                this.shakeTimer = 0;
+                this.shakeIntensity = 0;
+            }
+        }
 
         // 1. 更新玩家
         this.player.update(dt, input, this.map, this);
@@ -128,17 +185,31 @@ class GameEngine {
 
     // ---------- 实体工厂 ----------
 
-    /** 生成子弹 */
+    /**
+     * 生成子弹。
+     * @param {number} x — 起始 X（像素）
+     * @param {number} y — 起始 Y（像素）
+     * @param {number} direction — Utils.Direction 枚举值
+     * @param {number} damage — 伤害值
+     * @param {boolean} isFriendly — true=玩家子弹, false=敌人子弹
+     */
     spawnBullet(x, y, direction, damage, isFriendly) {
         this.bullets.push(new Bullet(x, y, direction, damage, isFriendly));
         if (isFriendly) {
+            this.stats.shotsFired++;
             this.audio.playShoot();
         }
     }
 
-    /** 生成敌人 */
-    spawnEnemy(type, x, y) {
-        this.enemies.push(new Enemy(type, x, y));
+    /**
+     * 生成敌人。
+     * @param {number} type — EnemyType 枚举值
+     * @param {number} x — 生成位置 X（像素）
+     * @param {number} y — 生成位置 Y（像素）
+     * @param {number} [waveNum=1] — 当前波次编号，用于属性缩放
+     */
+    spawnEnemy(type, x, y, waveNum = 1) {
+        this.enemies.push(new Enemy(type, x, y, waveNum));
     }
 
     /** 生成道具（Phase 3） */
@@ -147,7 +218,14 @@ class GameEngine {
         console.log('spawnPowerup not implemented yet:', type, x, y);
     }
 
-    /** 生成粒子效果 */
+    /**
+     * 生成粒子效果。
+     * @param {number} x — 中心位置 X
+     * @param {number} y — 中心位置 Y
+     * @param {string} color — CSS 颜色字符串
+     * @param {number} [count=8] — 粒子数量
+     * @param {number} [speed=100] — 粒子初速度（像素/秒）
+     */
     spawnParticles(x, y, color, count = 8, speed = 100) {
         for (let i = 0; i < count; i++) {
             const angle = (Math.PI * 2 / count) * i + Utils.randRange(-0.3, 0.3);
@@ -157,6 +235,15 @@ class GameEngine {
 
     // ---------- 碰撞检测 ----------
 
+    /**
+     * 碰撞检测主循环。
+     *
+     * 检测顺序（与更新顺序解耦，统一处理）：
+     * 1. 友方子弹 vs 地图障碍 — 子弹销毁，产生碎片粒子
+     * 2. 友方子弹 vs 敌人 — 敌人扣血/死亡，更新统计，掉落道具
+     * 3. 玩家 vs 敌人 — 玩家受伤/死亡，触发屏幕震动
+     * 4. 玩家 vs 道具 — 应用道具效果，更新统计
+     */
     _checkCollisions() {
         // 子弹 vs 地图障碍（仅友方子弹）
         for (const b of this.bullets) {
@@ -175,10 +262,12 @@ class GameEngine {
                 if (e.queuedForDeletion) continue;
                 if (Utils.aabbIntersect(b.boundingBox, e.boundingBox)) {
                     b.queuedForDeletion = true;
+                    this.stats.shotsHit++;
                     if (e.takeDamage(b.damage)) {
                         // 敌人死亡
                         e.queuedForDeletion = true;
                         this.score += e.scoreValue;
+                        this.stats.enemiesKilled++;
                         this.spawnParticles(e.x, e.y, e.deathColor, 12, 120);
                         this.audio.playEnemyDeath();
                         // Phase 3: 掉落道具
@@ -202,8 +291,15 @@ class GameEngine {
                 if (e.queuedForDeletion) continue;
                 if (Utils.aabbIntersect(this.player.boundingBox, e.boundingBox)) {
                     if (this.player.takeDamage()) {
+                        this.stats.damageTaken++;
+                        this.shakeTimer = 0.3;
+                        this.shakeIntensity = 4;
                         this.spawnParticles(this.player.x, this.player.y, '#F44336', 10, 150);
                         this.audio.playPlayerDeath();
+                    } else {
+                        this.stats.damageTaken++;
+                        this.shakeTimer = 0.15;
+                        this.shakeIntensity = 2;
                     }
                     break;  // 一帧只受一次伤
                 }
@@ -217,8 +313,10 @@ class GameEngine {
                 p.apply(this.player, this);
                 p.queuedForDeletion = true;
                 if (p.type === PowerupType.COIN || p.type === PowerupType.NICKEL) {
+                    this.stats.coinsCollected++;
                     this.audio.playCoin();
                 } else {
+                    this.stats.powerupsCollected++;
                     this.audio.playPowerup();
                 }
             }
@@ -237,6 +335,15 @@ class GameEngine {
     // ---------- 绘制 ----------
 
     draw(ctx) {
+        ctx.save();
+
+        // Phase 7: 屏幕震动
+        if (this.shakeTimer > 0) {
+            const sx = (Math.random() - 0.5) * this.shakeIntensity * 2;
+            const sy = (Math.random() - 0.5) * this.shakeIntensity * 2;
+            ctx.translate(sx, sy);
+        }
+
         // 1. 地图
         this.map.draw(ctx);
 
@@ -267,11 +374,16 @@ class GameEngine {
         if (this.isInShop) {
             this.shop.draw(ctx, this.coins);
         }
+
+        ctx.restore();
     }
 
     // ---------- 存档 ----------
 
-    /** 加载存档 */
+    /**
+     * 从 localStorage 加载存档数据。
+     * @returns {{highScore: number, highestWave: number, totalCoinsEarned: number, gamesPlayed: number}}
+     */
     _loadSave() {
         try {
             const raw = localStorage.getItem('prairieKingLite_save');
@@ -284,7 +396,10 @@ class GameEngine {
         return { highScore: 0, highestWave: 0, totalCoinsEarned: 0, gamesPlayed: 0 };
     }
 
-    /** 保存存档 */
+    /**
+     * 将当前存档数据写入 localStorage。
+     * 失败时静默处理（console.warn），不阻断游戏流程。
+     */
     _saveSave() {
         try {
             localStorage.setItem('prairieKingLite_save', JSON.stringify(this.saveData));
@@ -293,7 +408,10 @@ class GameEngine {
         }
     }
 
-    /** 游戏结束时更新存档 */
+    /**
+     * 游戏结束时更新存档统计。
+     * 比较本次成绩与历史最高，必要时刷新记录，然后调用 _saveSave() 持久化。
+     */
     updateSaveOnGameOver() {
         this.saveData.gamesPlayed++;
         this.saveData.totalCoinsEarned += this.coins;
@@ -308,9 +426,19 @@ class GameEngine {
 }
 
 /**
- * Particle — 简单粒子效果（Phase 0/1 最小实现）
+ * Particle — 简单粒子效果。
+ *
+ * 每个粒子具有位置、速度、颜色和生命周期。
+ * 更新时应用速度和阻力，生命周期结束后标记为删除。
  */
 class Particle {
+    /**
+     * @param {number} x — 起始 X
+     * @param {number} y — 起始 Y
+     * @param {string} color — CSS 颜色
+     * @param {number} speed — 初速度（像素/秒）
+     * @param {number} angle — 发射角度（弧度）
+     */
     constructor(x, y, color, speed, angle) {
         this.x = x;
         this.y = y;
@@ -323,6 +451,10 @@ class Particle {
         this.queuedForDeletion = false;
     }
 
+    /**
+     * 更新粒子位置和生命周期。
+     * @param {number} dt — 秒
+     */
     update(dt) {
         this.x += this.vx * dt;
         this.y += this.vy * dt;

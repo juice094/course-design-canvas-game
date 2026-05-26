@@ -27,15 +27,18 @@ const EnemyStats = {
 };
 
 class Enemy {
-    constructor(type, x, y) {
+    constructor(type, x, y, waveNum = 1) {
         this.type = type;
         this.x = x;
         this.y = y;
 
         const stats = EnemyStats[type];
-        this.speed = stats.speed;
-        this.maxHealth = stats.health;
-        this.health = stats.health;
+        // 波次缩放：速度每5波+10%，血量每3波+1
+        const speedMult = 1 + Math.floor(waveNum / 5) * 0.1;
+        const healthBonus = Math.floor(waveNum / 3);
+        this.speed = stats.speed * speedMult;
+        this.maxHealth = stats.health + healthBonus;
+        this.health = this.maxHealth;
         this.scoreValue = stats.score;
         this.baseColor = stats.color;
         this.deathColor = stats.deathColor;

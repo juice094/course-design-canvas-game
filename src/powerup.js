@@ -5,22 +5,32 @@
  * 敌人死亡后概率掉落，玩家触碰拾取。
  */
 
+/**
+ * 道具类型枚举。
+ * 分为两类：
+ * - 即时效果（HEART, COIN, NICKEL, LIFE, NUKE, TELEPORT）
+ * - 限时效果（SPREAD, RAPIDFIRE, SHOTGUN, SPEED, SKULL, SHERRIFF）
+ */
 const PowerupType = {
-    HEART:     'HEART',      // 回血
-    COIN:      'COIN',       // +1金币
-    NICKEL:    'NICKEL',     // +5金币
-    LIFE:      'LIFE',       // +1命
-    SPREAD:    'SPREAD',     // 8方向射击 10s
-    RAPIDFIRE: 'RAPIDFIRE',  // 射速÷4 10s
-    SHOTGUN:   'SHOTGUN',    // 3发散射 10s
-    SPEED:     'SPEED',      // 移速×1.5 10s
-    NUKE:      'NUKE',       // 清屏
-    TELEPORT:  'TELEPORT',   // 随机传送+无敌
-    SKULL:     'SKULL',      // 僵尸模式 10s
-    SHERRIFF:  'SHERRIFF',   // 组合道具
+    HEART:     'HEART',      // 回复 1 点生命
+    COIN:      'COIN',       // +1 金币
+    NICKEL:    'NICKEL',     // +5 金币
+    LIFE:      'LIFE',       // +1 条命
+    SPREAD:    'SPREAD',     // 8方向射击，持续 10s
+    RAPIDFIRE: 'RAPIDFIRE',  // 射速 ÷4，持续 10s
+    SHOTGUN:   'SHOTGUN',    // 子弹扩散为 3 发，持续 10s
+    SPEED:     'SPEED',      // 移速 ×1.5，持续 10s
+    NUKE:      'NUKE',       // 清屏所有敌人
+    TELEPORT:  'TELEPORT',   // 随机传送到安全位置 + 4s 无敌
+    SKULL:     'SKULL',      // 僵尸模式（无敌），持续 10s
+    SHERRIFF:  'SHERRIFF',   // 组合道具：霰弹 + 速射 + 加速，持续 20s
 };
 
-/** 道具外观配置 */
+/**
+ * 道具视觉配置表。
+ * 每种道具对应唯一的颜色、标签文字和背景色，用于 Canvas 绘制。
+ * @type {Object<string, {color: string, label: string, bg: string}>}
+ */
 const PowerupVisuals = {
     [PowerupType.HEART]:     { color: '#F44336', label: '♥', bg: '#FFCDD2' },
     [PowerupType.COIN]:      { color: '#FFD700', label: '$', bg: '#FFF8E1' },
@@ -36,20 +46,39 @@ const PowerupVisuals = {
     [PowerupType.SHERRIFF]:  { color: '#FFD700', label: '★', bg: '#FFF59D' },
 };
 
+/**
+ * 道具实体类。
+ *
+ * 职责：
+ * - 维护道具的位置、存活时间和视觉效果
+ * - 提供碰撞盒供 engine 检测玩家拾取
+ * - 被拾取时根据类型对玩家或游戏状态施加效果
+ *
+ * 生命周期：
+ * 1. 敌人死亡 → `Powerup.randomDrop()` 决定是否生成
+ * 2. 掉落在地面，显示浮动动画，15 秒后自动消失
+ * 3. 玩家触碰 → `apply()` 执行效果 → `queuedForDeletion = true`
+ */
 class Powerup {
+    /**
+     * @param {string} type — PowerupType 常量
+     * @param {number} x — 掉落位置 X（像素）
+     * @param {number} y — 掉落位置 Y（像素）
+     */
     constructor(type, x, y) {
         this.type = type;
         this.x = x;
         this.y = y;
         this.size = 28;
-        this.bobOffset = 0;
-        this.bobSpeed = 3;
-        this.life = 15;      // 道具在地上存在15秒后消失
+        this.bobOffset = 0;      // 浮动动画相位
+        this.bobSpeed = 3;       // 浮动速度
+        this.life = 15;          // 道具在地上存在 15 秒后消失
         this.maxLife = 15;
-        this.blinkTimer = 0;
+        this.blinkTimer = 0;     // 消失前闪烁计时器
         this.queuedForDeletion = false;
     }
 
+    /** 碰撞盒（AABB），用于玩家拾取检测 */
     get boundingBox() {
         const half = this.size / 2;
         return {
@@ -60,11 +89,15 @@ class Powerup {
         };
     }
 
+    /**
+     * 每帧更新。
+     * @param {number} dt — 秒
+     */
     update(dt) {
         this.bobOffset += dt * this.bobSpeed;
         this.life -= dt;
 
-        // 最后3秒开始闪烁
+        // 最后 3 秒开始闪烁
         if (this.life < 3) {
             this.blinkTimer += dt;
         }
@@ -74,6 +107,11 @@ class Powerup {
         }
     }
 
+    /**
+     * 绘制道具。
+     * 包含浮动动画、背景光晕、标签文字和消失前闪烁效果。
+     * @param {CanvasRenderingContext2D} ctx
+     */
     draw(ctx) {
         const visual = PowerupVisuals[this.type];
         const bobY = Math.sin(this.bobOffset) * 3;
@@ -82,7 +120,7 @@ class Powerup {
 
         ctx.save();
 
-        // 闪烁效果
+        // 闪烁效果：消失前 3 秒透明度交替变化
         if (this.life < 3 && Math.sin(this.blinkTimer * 10) < 0) {
             ctx.globalAlpha = 0.3;
         }
@@ -113,7 +151,8 @@ class Powerup {
     }
 
     /**
-     * 应用道具效果
+     * 应用道具效果。
+     * 根据道具类型对玩家属性或游戏状态产生即时/限时影响。
      * @param {Player} player
      * @param {GameEngine} engine
      */
@@ -171,7 +210,13 @@ class Powerup {
         }
     }
 
-    /** 根据敌人类型随机生成掉落 */
+    /**
+     * 根据概率随机生成掉落道具。
+     * 掉落概率：5% 道具，10% 金币，85% 无掉落。
+     * @param {number} x — 掉落位置 X
+     * @param {number} y — 掉落位置 Y
+     * @returns {Powerup|null}
+     */
     static randomDrop(x, y) {
         const roll = Math.random();
         if (roll < 0.05) {

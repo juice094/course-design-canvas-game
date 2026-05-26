@@ -253,9 +253,16 @@ class Game {
             ctx.fillText(recordText.join('  '), cx, cy + 70);
         }
 
+        // Phase 7: 本局详细统计
+        const st = this.engine.stats;
+        const accuracy = st.shotsFired > 0 ? Math.round((st.shotsHit / st.shotsFired) * 100) : 0;
+        ctx.fillStyle = '#AAA';
+        ctx.font = '12px "Courier New", monospace';
+        ctx.fillText(`击杀: ${st.enemiesKilled}  射击: ${st.shotsFired}  命中: ${accuracy}%  时长: ${Math.floor(st.timeAlive)}s`, cx, cy + 95);
+
         ctx.fillStyle = '#ccc';
         ctx.font = '18px "Courier New", monospace';
-        ctx.fillText('按 SPACE 返回菜单', cx, cy + 110);
+        ctx.fillText('按 SPACE 返回菜单', cx, cy + 130);
     }
 
     // ---------- HUD ----------
