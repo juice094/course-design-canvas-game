@@ -125,6 +125,56 @@ class GameMap {
         return { x: this.width / 2, y: this.height / 2 };
     }
 
+    /**
+     * 在地图指定边缘寻找可通行的生成位置。
+     *
+     * 由于 2x2 障碍块可能延伸到边缘（如 ox=13 时 ox+1=14），
+     * 固定坐标的边缘位置可能与障碍重叠。此方法循环尝试随机位置，
+     * 直到找到可通行的瓦片为止。
+     *
+     * @param {number} edge — 0=上, 1=右, 2=下, 3=左
+     * @returns {{x: number, y: number}} 像素坐标
+     */
+    findEdgeSpawnPosition(edge) {
+        let attempts = 0;
+        while (attempts < 100) {
+            let x, y;
+            switch (edge) {
+                case 0: // 上边
+                    x = Utils.randInt(1, this.gridW - 2) * this.tileSize + this.tileSize / 2;
+                    y = this.tileSize * 1.5;
+                    break;
+                case 1: // 右边
+                    x = (this.gridW - 2) * this.tileSize + this.tileSize / 2;
+                    y = Utils.randInt(1, this.gridH - 2) * this.tileSize + this.tileSize / 2;
+                    break;
+                case 2: // 下边
+                    x = Utils.randInt(1, this.gridW - 2) * this.tileSize + this.tileSize / 2;
+                    y = (this.gridH - 2) * this.tileSize + this.tileSize / 2;
+                    break;
+                case 3: // 左边
+                    x = this.tileSize * 1.5;
+                    y = Utils.randInt(1, this.gridH - 2) * this.tileSize + this.tileSize / 2;
+                    break;
+            }
+            const g = this.pixelToGrid(x, y);
+            if (this.getTile(g.x, g.y) !== TileType.BARRIER) {
+                return { x, y };
+            }
+            attempts++;
+        }
+        // 兜底：返回边缘中间位置（围墙内第一格，理论上总是可通行）
+        const midX = this.width / 2;
+        const midY = this.height / 2;
+        switch (edge) {
+            case 0: return { x: midX, y: this.tileSize * 1.5 };
+            case 1: return { x: (this.gridW - 2) * this.tileSize + this.tileSize / 2, y: midY };
+            case 2: return { x: midX, y: (this.gridH - 2) * this.tileSize + this.tileSize / 2 };
+            case 3: return { x: this.tileSize * 1.5, y: midY };
+        }
+        return { x: midX, y: midY };
+    }
+
     /** 绘制地图 */
     draw(ctx) {
         for (let y = 0; y < this.gridH; y++) {

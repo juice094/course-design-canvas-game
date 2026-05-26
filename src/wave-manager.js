@@ -138,31 +138,11 @@ class WaveManager {
         const types = this._getAvailableEnemyTypes();
         const type = Utils.pick(types);
 
-        // 选择地图四边之一
+        // 选择地图四边之一，使用全局方法确保不生成在墙内
         const edge = Utils.randInt(0, 3);
-        const tileSize = engine.map.tileSize;
-        let x, y;
+        const pos = engine.map.findEdgeSpawnPosition(edge);
 
-        switch (edge) {
-            case 0: // 上边
-                x = Utils.randInt(1, engine.map.gridW - 2) * tileSize + tileSize / 2;
-                y = tileSize * 1.5;
-                break;
-            case 1: // 右边
-                x = (engine.map.gridW - 2) * tileSize + tileSize / 2;
-                y = Utils.randInt(1, engine.map.gridH - 2) * tileSize + tileSize / 2;
-                break;
-            case 2: // 下边
-                x = Utils.randInt(1, engine.map.gridW - 2) * tileSize + tileSize / 2;
-                y = (engine.map.gridH - 2) * tileSize + tileSize / 2;
-                break;
-            case 3: // 左边
-                x = tileSize * 1.5;
-                y = Utils.randInt(1, engine.map.gridH - 2) * tileSize + tileSize / 2;
-                break;
-        }
-
-        engine.spawnEnemy(type, x, y, this.waveNum);
+        engine.spawnEnemy(type, pos.x, pos.y, this.waveNum);
     }
 
     /**
