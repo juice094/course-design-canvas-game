@@ -212,10 +212,9 @@ class GameEngine {
         this.enemies.push(new Enemy(type, x, y, waveNum));
     }
 
-    /** 生成道具（Phase 3） */
+    /** 生成指定类型的道具 */
     spawnPowerup(type, x, y) {
-        // TODO: Phase 3 实现
-        console.log('spawnPowerup not implemented yet:', type, x, y);
+        this.powerups.push(new Powerup(type, x, y));
     }
 
     /**
