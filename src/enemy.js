@@ -17,13 +17,13 @@ const EnemyType = {
 
 /** 敌人属性配置表 */
 const EnemyStats = {
-    [EnemyType.ORC]:      { speed: 2, health: 1, score: 10, color: '#F44336', size: 36, deathColor: '#B71C1C' },
-    [EnemyType.OGRE]:     { speed: 1, health: 3, score: 30, color: '#B71C1C', size: 40, deathColor: '#7F0000' },
-    [EnemyType.MUSHROOM]: { speed: 3, health: 2, score: 20, color: '#E91E63', size: 34, deathColor: '#880E4F' },
-    [EnemyType.GHOST]:    { speed: 2, health: 1, score: 15, color: '#ECEFF1', size: 34, deathColor: '#CFD8DC' },
-    [EnemyType.MUMMY]:    { speed: 1, health: 6, score: 40, color: '#D7CCC8', size: 36, deathColor: '#5D4037' },
-    [EnemyType.DEVIL]:    { speed: 3, health: 3, score: 50, color: '#7B1FA2', size: 34, deathColor: '#4A148C' },
-    [EnemyType.SPIKEY]:   { speed: 3, health: 2, score: 25, color: '#FFEB3B', size: 34, deathColor: '#F57F17' },
+    [EnemyType.ORC]:      { speed: 2, health: 1, score: 10, color: '#F44336', size: 36, deathColor: '#B71C1C', flying: false },
+    [EnemyType.OGRE]:     { speed: 1, health: 3, score: 30, color: '#B71C1C', size: 40, deathColor: '#7F0000', flying: false },
+    [EnemyType.MUSHROOM]: { speed: 3, health: 2, score: 20, color: '#E91E63', size: 34, deathColor: '#880E4F', flying: false },
+    [EnemyType.GHOST]:    { speed: 2, health: 1, score: 15, color: '#ECEFF1', size: 34, deathColor: '#CFD8DC', flying: true },
+    [EnemyType.MUMMY]:    { speed: 1, health: 6, score: 40, color: '#D7CCC8', size: 36, deathColor: '#5D4037', flying: false },
+    [EnemyType.DEVIL]:    { speed: 3, health: 3, score: 50, color: '#7B1FA2', size: 34, deathColor: '#4A148C', flying: true },
+    [EnemyType.SPIKEY]:   { speed: 3, health: 2, score: 25, color: '#FFEB3B', size: 34, deathColor: '#F57F17', flying: false },
 };
 
 class Enemy {
@@ -50,6 +50,20 @@ class Enemy {
         this.oppositeMotionGuy = Utils.chance(0.5);
         this.uninterested = false;       // Orc/Mummy: 随机游走模式
         this.flashTimer = 0;             // 受伤闪烁
+
+        // 飞行单位（Ghost/Devil）: 惯性移动
+        this.accelX = 0;
+        this.accelY = 0;
+        this.flying = stats.flying || false;
+
+        // Spikey: 变身机制
+        this.isSpikeyTransformed = false;
+        this.spikeyTargetX = 0;
+        this.spikeyTargetY = 0;
+        this.spikeyTransformed = false;  // 已变身状态
+        if (this.type === EnemyType.SPIKEY) {
+            this._pickSpikeyTarget(map);
+        }
 
         this.queuedForDeletion = false;
     }
@@ -78,6 +92,12 @@ class Enemy {
         if (this.flashTimer > 0) {
             this.flashTimer -= dt * 1000;
             if (this.flashTimer < 0) this.flashTimer = 0;
+        }
+
+        // Spikey 变身逻辑
+        if (this.type === EnemyType.SPIKEY && !this.spikeyTransformed) {
+            this._updateSpikey(dt, map);
+            return;
         }
 
         this.moveCounter += dt * 60;  // 换算为 tick（假设60fps）
@@ -127,7 +147,32 @@ class Enemy {
         let mx = 0, my = 0;
         const pixelSpeed = this.speed * 48 * dt;  // speed * tileSize * dt
 
-        // 优先移动距离更大的轴
+        // 飞行单位：使用惯性移动，无视地形
+        if (this.flying) {
+            const targetVel = Utils.getVelocityTowardPoint(this.x, this.y, this.targetX, this.targetY, pixelSpeed);
+            // 平滑加速度
+            this.accelX += 0.1 * (targetVel.x > this.accelX ? 1 : -1);
+            this.accelY += 0.1 * (targetVel.y > this.accelY ? 1 : -1);
+            this.accelX = Utils.clamp(this.accelX, -pixelSpeed, pixelSpeed);
+            this.accelY = Utils.clamp(this.accelY, -pixelSpeed, pixelSpeed);
+            mx = this.accelX;
+            my = this.accelY;
+
+            // 飞行单位只检查怪物间碰撞，不检查地形
+            const testRect = {
+                x: this.x + mx - this.width / 2,
+                y: this.y + my - this.height / 2,
+                width: this.width,
+                height: this.height
+            };
+            if (!this._collidesWithOtherEnemies(testRect, otherEnemies)) {
+                this.x += mx;
+                this.y += my;
+            }
+            return;
+        }
+
+        // 地面单位：优先移动距离更大的轴
         if (Math.abs(dx) > Math.abs(dy)) {
             mx = dx > 0 ? pixelSpeed : -pixelSpeed;
             // oppositeMotionGuy 可能反转轴优先级
@@ -169,6 +214,48 @@ class Enemy {
             if (map.isRectPassable(testRect) && !this._collidesWithOtherEnemies(testRect, otherEnemies)) {
                 this.y = newY;
             }
+        }
+    }
+
+    // ---------- Spikey 特殊逻辑 ----------
+
+    _pickSpikeyTarget(map) {
+        const pos = map.findSafePosition();
+        this.spikeyTargetX = pos.x;
+        this.spikeyTargetY = pos.y;
+    }
+
+    _updateSpikey(dt, map) {
+        const dx = this.spikeyTargetX - this.x;
+        const dy = this.spikeyTargetY - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 10) {
+            // 到达目标，变身！
+            this.spikeyTransformed = true;
+            this.health += 5;
+            this.maxHealth += 5;
+            this.color = '#FF9800';
+            this.size = 40;
+            // 变身无敌片刻
+            this.flashTimer = 500;
+            return;
+        }
+
+        // 朝目标移动
+        const pixelSpeed = this.speed * 48 * dt;
+        const mx = (dx / dist) * pixelSpeed;
+        const my = (dy / dist) * pixelSpeed;
+
+        const testRect = {
+            x: this.x + mx - this.width / 2,
+            y: this.y + my - this.height / 2,
+            width: this.width,
+            height: this.height
+        };
+        if (map.isRectPassable(testRect)) {
+            this.x += mx;
+            this.y += my;
         }
     }
 
@@ -255,6 +342,77 @@ class Enemy {
                 ctx.beginPath();
                 ctx.arc(px + s / 2, py + s / 2, 3, 0, Math.PI * 2);
                 ctx.fill();
+                break;
+            case EnemyType.GHOST:
+                // 半透明 + 幽灵尾巴
+                ctx.globalAlpha = 0.6;
+                ctx.fillStyle = this.baseColor;
+                ctx.fillRect(px, py + s * 0.3, s, s * 0.7);
+                ctx.beginPath();
+                ctx.arc(px + s / 2, py + s * 0.3, s / 2, Math.PI, 0);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(px + s * 0.25, py + s * 0.4, 3, 3);
+                ctx.fillRect(px + s * 0.65, py + s * 0.4, 3, 3);
+                break;
+            case EnemyType.MUMMY:
+                // 绷带条纹
+                ctx.fillStyle = '#8D6E63';
+                for (let i = 0; i < 3; i++) {
+                    ctx.fillRect(px, py + 6 + i * 10, s, 3);
+                }
+                ctx.fillStyle = '#FFF';
+                ctx.fillRect(px + 8, py + 10, 5, 5);
+                ctx.fillRect(px + s - 13, py + 10, 5, 5);
+                ctx.fillStyle = '#000';
+                ctx.fillRect(px + 10, py + 12, 2, 2);
+                ctx.fillRect(px + s - 11, py + 12, 2, 2);
+                break;
+            case EnemyType.DEVIL:
+                // 红色角
+                ctx.fillStyle = '#D32F2F';
+                ctx.beginPath();
+                ctx.moveTo(px + 4, py + 4);
+                ctx.lineTo(px + 10, py - 6);
+                ctx.lineTo(px + 14, py + 4);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(px + s - 4, py + 4);
+                ctx.lineTo(px + s - 10, py - 6);
+                ctx.lineTo(px + s - 14, py + 4);
+                ctx.fill();
+                ctx.fillStyle = '#FFF';
+                ctx.fillRect(px + 8, py + 12, 5, 5);
+                ctx.fillRect(px + s - 13, py + 12, 5, 5);
+                ctx.fillStyle = '#F44336';
+                ctx.fillRect(px + 10, py + 14, 2, 2);
+                ctx.fillRect(px + s - 11, py + 14, 2, 2);
+                break;
+            case EnemyType.SPIKEY:
+                // 黑色尖刺
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                const spikeCount = 6;
+                for (let i = 0; i < spikeCount; i++) {
+                    const angle = (Math.PI * 2 / spikeCount) * i - Math.PI / 2;
+                    const sx = px + s / 2 + Math.cos(angle) * s * 0.4;
+                    const sy = py + s / 2 + Math.sin(angle) * s * 0.4;
+                    const ex = px + s / 2 + Math.cos(angle) * s * 0.55;
+                    const ey = py + s / 2 + Math.sin(angle) * s * 0.55;
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.lineTo(ex, ey);
+                    ctx.stroke();
+                }
+                if (this.spikeyTransformed) {
+                    // 变身后的橙色发光环
+                    ctx.strokeStyle = '#FF9800';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(px + s / 2, py + s / 2, s * 0.6, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
                 break;
         }
     }
