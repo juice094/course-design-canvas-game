@@ -29,10 +29,9 @@ class GameEngine {
         this.waveNum = 0;
         this.isGameOver = false;
 
-        // Phase 2: 敌人生成
-        this.spawnTimer = 0;
-        this.spawnInterval = 2.0;   // 初始每2秒生成一个
-        this.maxEnemies = 20;
+        // Phase 3: 波次管理器
+        this.waveManager = new WaveManager();
+        this.waveManager.startWave(1);
     }
 
     /** 重置游戏 */
@@ -47,8 +46,8 @@ class GameEngine {
         this.score = 0;
         this.waveNum = 0;
         this.isGameOver = false;
-        this.spawnTimer = 0;
-        this.spawnInterval = 2.0;
+        this.waveManager = new WaveManager();
+        this.waveManager.startWave(1);
     }
 
     /** 主更新 */
@@ -69,11 +68,17 @@ class GameEngine {
             b.update(dt);
         }
 
-        // 3. 敌人生成
-        this.spawnTimer += dt;
-        if (this.spawnTimer >= this.spawnInterval && this.enemies.length < this.maxEnemies) {
-            this.spawnTimer = 0;
-            this._spawnEnemyAtEdge();
+        // 3. 波次管理器更新
+        const waveResult = this.waveManager.update(dt, this);
+        if (waveResult.waveComplete) {
+            this.waveNum++;
+            if (waveResult.shouldShop) {
+                // Phase 4: 进入商店
+                // 暂时直接进入下一波
+                this.waveManager.startWave(this.waveNum + 1);
+            } else {
+                this.waveManager.startWave(this.waveNum + 1);
+            }
         }
 
         // 4. 更新敌人
@@ -108,38 +113,6 @@ class GameEngine {
     /** 生成敌人 */
     spawnEnemy(type, x, y) {
         this.enemies.push(new Enemy(type, x, y));
-    }
-
-    /** 在地图边缘生成随机敌人 */
-    _spawnEnemyAtEdge() {
-        const types = [EnemyType.ORC, EnemyType.ORC, EnemyType.ORC, EnemyType.OGRE, EnemyType.MUSHROOM];
-        const type = Utils.pick(types);
-
-        // 选择四边之一
-        const edge = Utils.randInt(0, 3);
-        const tileSize = this.map.tileSize;
-        let x, y;
-
-        switch (edge) {
-            case 0: // 上边
-                x = Utils.randInt(1, this.map.gridW - 2) * tileSize + tileSize / 2;
-                y = tileSize * 1.5;
-                break;
-            case 1: // 右边
-                x = (this.map.gridW - 2) * tileSize + tileSize / 2;
-                y = Utils.randInt(1, this.map.gridH - 2) * tileSize + tileSize / 2;
-                break;
-            case 2: // 下边
-                x = Utils.randInt(1, this.map.gridW - 2) * tileSize + tileSize / 2;
-                y = (this.map.gridH - 2) * tileSize + tileSize / 2;
-                break;
-            case 3: // 左边
-                x = tileSize * 1.5;
-                y = Utils.randInt(1, this.map.gridH - 2) * tileSize + tileSize / 2;
-                break;
-        }
-
-        this.spawnEnemy(type, x, y);
     }
 
     /** 生成道具（Phase 3） */
@@ -181,7 +154,11 @@ class GameEngine {
                         e.queuedForDeletion = true;
                         this.score += e.scoreValue;
                         this.spawnParticles(e.x, e.y, e.deathColor, 12, 120);
-                        // TODO: Phase 3 掉落金币/道具
+                        // Phase 3: 掉落道具
+                        const drop = Powerup.randomDrop(e.x, e.y);
+                        if (drop) {
+                            this.powerups.push(drop);
+                        }
                     } else {
                         // 受伤闪烁
                         this.spawnParticles(b.x, b.y, '#FFF', 3, 40);

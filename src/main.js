@@ -228,10 +228,16 @@ class Game {
         ctx.fillStyle = '#FFD700';
         ctx.fillText(`$${this.engine.coins}`, 16, 48);
 
-        // 波次
+        // 波次 + 进度
         ctx.fillStyle = '#FFF';
         ctx.textAlign = 'right';
-        ctx.fillText(`WAVE ${this.engine.waveNum}`, this.width - 16, 16);
+        const waveInfo = this.engine.waveManager.getWaveInfo();
+        ctx.fillText(`WAVE ${waveInfo.waveNum}`, this.width - 16, 16);
+        if (waveInfo.active) {
+            ctx.fillStyle = '#AAA';
+            ctx.font = '12px "Courier New", monospace';
+            ctx.fillText(`${waveInfo.spawned}/${waveInfo.total}`, this.width - 16, 34);
+        }
 
         // 道具计时器
         let py = 80;
