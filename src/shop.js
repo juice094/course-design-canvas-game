@@ -232,6 +232,7 @@ class Shop {
     _purchase(item, player, engine) {
         engine.coins -= item.price;
         item.purchased = true;
+        if (engine.audio) engine.audio.playBuy();
 
         switch (item.type) {
             case ShopItemType.AMMO:

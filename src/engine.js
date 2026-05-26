@@ -36,6 +36,12 @@ class GameEngine {
         // Phase 4: 商店
         this.shop = new Shop();
         this.isInShop = false;
+
+        // Phase 6: 音效
+        this.audio = new AudioManager();
+
+        // Phase 6: 存档
+        this.saveData = this._loadSave();
     }
 
     /** 重置游戏 */
@@ -54,6 +60,7 @@ class GameEngine {
         this.waveManager.startWave(1);
         this.shop = new Shop();
         this.isInShop = false;
+        this.audio.stopBGM();
     }
 
     /** 主更新 */
@@ -124,6 +131,9 @@ class GameEngine {
     /** 生成子弹 */
     spawnBullet(x, y, direction, damage, isFriendly) {
         this.bullets.push(new Bullet(x, y, direction, damage, isFriendly));
+        if (isFriendly) {
+            this.audio.playShoot();
+        }
     }
 
     /** 生成敌人 */
@@ -170,6 +180,7 @@ class GameEngine {
                         e.queuedForDeletion = true;
                         this.score += e.scoreValue;
                         this.spawnParticles(e.x, e.y, e.deathColor, 12, 120);
+                        this.audio.playEnemyDeath();
                         // Phase 3: 掉落道具
                         const drop = Powerup.randomDrop(e.x, e.y);
                         if (drop) {
@@ -178,6 +189,7 @@ class GameEngine {
                     } else {
                         // 受伤闪烁
                         this.spawnParticles(b.x, b.y, '#FFF', 3, 40);
+                        this.audio.playHit();
                     }
                     break;
                 }
@@ -191,6 +203,7 @@ class GameEngine {
                 if (Utils.aabbIntersect(this.player.boundingBox, e.boundingBox)) {
                     if (this.player.takeDamage()) {
                         this.spawnParticles(this.player.x, this.player.y, '#F44336', 10, 150);
+                        this.audio.playPlayerDeath();
                     }
                     break;  // 一帧只受一次伤
                 }
@@ -203,6 +216,11 @@ class GameEngine {
             if (Utils.aabbIntersect(this.player.boundingBox, p.boundingBox)) {
                 p.apply(this.player, this);
                 p.queuedForDeletion = true;
+                if (p.type === PowerupType.COIN || p.type === PowerupType.NICKEL) {
+                    this.audio.playCoin();
+                } else {
+                    this.audio.playPowerup();
+                }
             }
         }
     }
@@ -249,6 +267,43 @@ class GameEngine {
         if (this.isInShop) {
             this.shop.draw(ctx, this.coins);
         }
+    }
+
+    // ---------- 存档 ----------
+
+    /** 加载存档 */
+    _loadSave() {
+        try {
+            const raw = localStorage.getItem('prairieKingLite_save');
+            if (raw) {
+                return JSON.parse(raw);
+            }
+        } catch (e) {
+            console.warn('Failed to load save:', e);
+        }
+        return { highScore: 0, highestWave: 0, totalCoinsEarned: 0, gamesPlayed: 0 };
+    }
+
+    /** 保存存档 */
+    _saveSave() {
+        try {
+            localStorage.setItem('prairieKingLite_save', JSON.stringify(this.saveData));
+        } catch (e) {
+            console.warn('Failed to save save:', e);
+        }
+    }
+
+    /** 游戏结束时更新存档 */
+    updateSaveOnGameOver() {
+        this.saveData.gamesPlayed++;
+        this.saveData.totalCoinsEarned += this.coins;
+        if (this.score > this.saveData.highScore) {
+            this.saveData.highScore = this.score;
+        }
+        if (this.waveNum > this.saveData.highestWave) {
+            this.saveData.highestWave = this.waveNum;
+        }
+        this._saveSave();
     }
 }
 

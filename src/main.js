@@ -27,6 +27,7 @@ class Game {
         this.input = new InputManager();
         this.engine = new GameEngine(canvas);
         this.state = GameState.MENU;
+        this.audioInitialized = false;
 
         this.lastTime = 0;
         this._boundLoop = this.loop.bind(this);
@@ -104,7 +105,13 @@ class Game {
 
     _updateMenu() {
         if (this.input.isPressed(GameAction.CONFIRM) || this.input.isPressed(GameAction.USE_POWERUP)) {
+            if (!this.audioInitialized) {
+                this.engine.audio.init();
+                this.audioInitialized = true;
+            }
+            this.engine.audio.resume();
             this.engine.reset();
+            this.engine.audio.startBGM();
             this.changeState(GameState.PLAYING);
         }
     }
@@ -128,6 +135,11 @@ class Game {
         ctx.font = '16px "Courier New", monospace';
         ctx.fillText('WASD 移动    方向键 射击', cx, cy + 30);
         ctx.fillText('Z / Space 使用道具    ESC / P 暂停', cx, cy + 55);
+
+        const s = this.engine.saveData;
+        ctx.fillStyle = '#AAA';
+        ctx.font = '12px "Courier New", monospace';
+        ctx.fillText(`最高分: ${s.highScore}  最高波次: ${s.highestWave}  游戏次数: ${s.gamesPlayed}`, cx, cy + 85);
 
         const blink = Math.sin(performance.now() / 300) > 0;
         if (blink) {
@@ -158,6 +170,8 @@ class Game {
         }
 
         if (this.engine.isGameOver) {
+            this.engine.updateSaveOnGameOver();
+            this.engine.audio.stopBGM();
             this.changeState(GameState.GAMEOVER);
         }
     }
@@ -228,9 +242,20 @@ class Game {
         ctx.fillText(`得分: ${this.engine.score}`, cx, cy + 10);
         ctx.fillText(`波次: ${this.engine.waveNum}`, cx, cy + 40);
 
+        const isNewHighScore = this.engine.saveData.highScore === this.engine.score && this.engine.score > 0;
+        const isNewHighWave = this.engine.saveData.highestWave === this.engine.waveNum && this.engine.waveNum > 0;
+        if (isNewHighScore || isNewHighWave) {
+            ctx.fillStyle = '#4CAF50';
+            ctx.font = 'bold 16px "Courier New", monospace';
+            const recordText = [];
+            if (isNewHighScore) recordText.push('新最高分!');
+            if (isNewHighWave) recordText.push('新最高波次!');
+            ctx.fillText(recordText.join('  '), cx, cy + 70);
+        }
+
         ctx.fillStyle = '#ccc';
         ctx.font = '18px "Courier New", monospace';
-        ctx.fillText('按 SPACE 返回菜单', cx, cy + 90);
+        ctx.fillText('按 SPACE 返回菜单', cx, cy + 110);
     }
 
     // ---------- HUD ----------
