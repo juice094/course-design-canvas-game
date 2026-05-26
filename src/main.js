@@ -56,6 +56,9 @@ class Game {
             case GameState.PLAYING:
                 this._updatePlaying(dt);
                 break;
+            case GameState.SHOP:
+                this._updateShop(dt);
+                break;
             case GameState.PAUSED:
                 this._updatePaused();
                 break;
@@ -79,6 +82,9 @@ class Game {
         switch (this.state) {
             case GameState.MENU:
                 this._drawMenu();
+                break;
+            case GameState.SHOP:
+                // 商店画面由 engine 绘制
                 break;
             case GameState.PAUSED:
                 this._drawPauseOverlay();
@@ -141,8 +147,22 @@ class Game {
 
         this.engine.update(dt, this.input);
 
+        if (this.engine.isInShop) {
+            this.changeState(GameState.SHOP);
+            return;
+        }
+
         if (this.engine.isGameOver) {
             this.changeState(GameState.GAMEOVER);
+        }
+    }
+
+    // ---------- 商店 ----------
+
+    _updateShop(dt) {
+        this.engine.update(dt, this.input);
+        if (!this.engine.isInShop) {
+            this.changeState(GameState.PLAYING);
         }
     }
 

@@ -32,6 +32,10 @@ class GameEngine {
         // Phase 3: 波次管理器
         this.waveManager = new WaveManager();
         this.waveManager.startWave(1);
+
+        // Phase 4: 商店
+        this.shop = new Shop();
+        this.isInShop = false;
     }
 
     /** 重置游戏 */
@@ -48,6 +52,8 @@ class GameEngine {
         this.isGameOver = false;
         this.waveManager = new WaveManager();
         this.waveManager.startWave(1);
+        this.shop = new Shop();
+        this.isInShop = false;
     }
 
     /** 主更新 */
@@ -74,11 +80,21 @@ class GameEngine {
             this.waveNum++;
             if (waveResult.shouldShop) {
                 // Phase 4: 进入商店
-                // 暂时直接进入下一波
-                this.waveManager.startWave(this.waveNum + 1);
+                this.isInShop = true;
+                this.shop.open(this.waveNum, this.player);
             } else {
                 this.waveManager.startWave(this.waveNum + 1);
             }
+        }
+
+        // 商店更新
+        if (this.isInShop) {
+            const shopClosed = this.shop.update(dt, this.player, input, this);
+            if (shopClosed) {
+                this.isInShop = false;
+                this.waveManager.startWave(this.waveNum + 1);
+            }
+            return;  // 商店状态下不更新其他实体
         }
 
         // 4. 更新敌人
@@ -227,6 +243,11 @@ class GameEngine {
         // 6. 子弹（在最上层）
         for (const b of this.bullets) {
             b.draw(ctx);
+        }
+
+        // 7. 商店（覆盖层）
+        if (this.isInShop) {
+            this.shop.draw(ctx, this.coins);
         }
     }
 }
