@@ -28,6 +28,11 @@ class GameEngine {
         this.score = 0;
         this.waveNum = 0;
         this.isGameOver = false;
+
+        // Phase 2: 敌人生成
+        this.spawnTimer = 0;
+        this.spawnInterval = 2.0;   // 初始每2秒生成一个
+        this.maxEnemies = 20;
     }
 
     /** 重置游戏 */
@@ -42,6 +47,8 @@ class GameEngine {
         this.score = 0;
         this.waveNum = 0;
         this.isGameOver = false;
+        this.spawnTimer = 0;
+        this.spawnInterval = 2.0;
     }
 
     /** 主更新 */
@@ -62,9 +69,16 @@ class GameEngine {
             b.update(dt);
         }
 
-        // 3. 更新敌人（Phase 2加入）
+        // 3. 敌人生成
+        this.spawnTimer += dt;
+        if (this.spawnTimer >= this.spawnInterval && this.enemies.length < this.maxEnemies) {
+            this.spawnTimer = 0;
+            this._spawnEnemyAtEdge();
+        }
+
+        // 4. 更新敌人
         for (const e of this.enemies) {
-            e.update(dt, this.player, this.map);
+            e.update(dt, this.player, this.map, this.enemies);
         }
 
         // 4. 更新道具（Phase 3加入）
@@ -91,10 +105,41 @@ class GameEngine {
         this.bullets.push(new Bullet(x, y, direction, damage, isFriendly));
     }
 
-    /** 生成敌人（Phase 2） */
+    /** 生成敌人 */
     spawnEnemy(type, x, y) {
-        // TODO: Phase 2 实现
-        console.log('spawnEnemy not implemented yet:', type, x, y);
+        this.enemies.push(new Enemy(type, x, y));
+    }
+
+    /** 在地图边缘生成随机敌人 */
+    _spawnEnemyAtEdge() {
+        const types = [EnemyType.ORC, EnemyType.ORC, EnemyType.ORC, EnemyType.OGRE, EnemyType.MUSHROOM];
+        const type = Utils.pick(types);
+
+        // 选择四边之一
+        const edge = Utils.randInt(0, 3);
+        const tileSize = this.map.tileSize;
+        let x, y;
+
+        switch (edge) {
+            case 0: // 上边
+                x = Utils.randInt(1, this.map.gridW - 2) * tileSize + tileSize / 2;
+                y = tileSize * 1.5;
+                break;
+            case 1: // 右边
+                x = (this.map.gridW - 2) * tileSize + tileSize / 2;
+                y = Utils.randInt(1, this.map.gridH - 2) * tileSize + tileSize / 2;
+                break;
+            case 2: // 下边
+                x = Utils.randInt(1, this.map.gridW - 2) * tileSize + tileSize / 2;
+                y = (this.map.gridH - 2) * tileSize + tileSize / 2;
+                break;
+            case 3: // 左边
+                x = tileSize * 1.5;
+                y = Utils.randInt(1, this.map.gridH - 2) * tileSize + tileSize / 2;
+                break;
+        }
+
+        this.spawnEnemy(type, x, y);
     }
 
     /** 生成道具（Phase 3） */
