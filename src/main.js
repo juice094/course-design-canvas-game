@@ -248,6 +248,14 @@ class Game {
         ctx.fillStyle = '#FFD700';
         ctx.fillText(`$${this.engine.coins}`, 16, 48);
 
+        // 得分
+        ctx.fillStyle = '#FFF';
+        ctx.fillText(`SCORE ${this.engine.score}`, 16, 72);
+
+        // 敌人数量
+        ctx.fillStyle = '#F44336';
+        ctx.fillText(`ENEMIES ${this.engine.enemies.length}`, 16, 96);
+
         // 波次 + 进度
         ctx.fillStyle = '#FFF';
         ctx.textAlign = 'right';
