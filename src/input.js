@@ -17,6 +17,7 @@ const GameAction = {
     USE_POWERUP: 'usePowerup',
     PAUSE:       'pause',
     CONFIRM:     'confirm',
+    RESTART:     'restart',
 };
 
 class InputManager {
@@ -48,6 +49,7 @@ class InputManager {
             'Escape':     GameAction.PAUSE,
             'KeyP':       GameAction.PAUSE,
             'Enter':      GameAction.CONFIRM,
+            'KeyR':       GameAction.RESTART,
         };
 
         // 注意：方向键同时用于移动和射击，但射击使用keydown事件的方向键

@@ -50,6 +50,7 @@ class Enemy {
         this.oppositeMotionGuy = Utils.chance(0.5);
         this.uninterested = false;       // Orc/Mummy: 随机游走模式
         this.flashTimer = 0;             // 受伤闪烁
+        this.stuckCounter = 0;           // 卡死检测计数器
 
         // 飞行单位（Ghost/Devil）: 惯性移动
         this.accelX = 0;
@@ -142,7 +143,10 @@ class Enemy {
         const dy = this.targetY - this.y;
 
         // 已到达目标附近 → 不需要移动
-        if (Math.abs(dx) < 2 && Math.abs(dy) < 2) return;
+        if (Math.abs(dx) < 2 && Math.abs(dy) < 2) {
+            this.stuckCounter = 0;
+            return;
+        }
 
         let mx = 0, my = 0;
         const pixelSpeed = this.speed * 48 * dt;  // speed * tileSize * dt
@@ -168,6 +172,7 @@ class Enemy {
             if (!this._collidesWithOtherEnemies(testRect, otherEnemies)) {
                 this.x += mx;
                 this.y += my;
+                this.stuckCounter = 0;
             }
             return;
         }
@@ -188,6 +193,8 @@ class Enemy {
             }
         }
 
+        let moved = false;
+
         // X轴移动 + 碰撞检测
         if (mx !== 0) {
             const newX = this.x + mx;
@@ -199,6 +206,7 @@ class Enemy {
             };
             if (map.isRectPassable(testRect) && !this._collidesWithOtherEnemies(testRect, otherEnemies)) {
                 this.x = newX;
+                moved = true;
             }
         }
 
@@ -213,7 +221,23 @@ class Enemy {
             };
             if (map.isRectPassable(testRect) && !this._collidesWithOtherEnemies(testRect, otherEnemies)) {
                 this.y = newY;
+                moved = true;
             }
+        }
+
+        // 卡死检测：连续 10 帧无法移动 → 重新选择目标
+        if (!moved) {
+            this.stuckCounter++;
+            if (this.stuckCounter > 10) {
+                this.stuckCounter = 0;
+                // 强制随机游走，找一个可通行的目标
+                const safe = map.findSafePosition();
+                this.targetX = safe.x;
+                this.targetY = safe.y;
+                this.uninterested = true;
+            }
+        } else {
+            this.stuckCounter = 0;
         }
     }
 

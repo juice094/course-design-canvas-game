@@ -145,6 +145,11 @@ class Game {
             return;
         }
 
+        if (this.input.isPressed(GameAction.RESTART)) {
+            this.engine.reset();
+            return;
+        }
+
         this.engine.update(dt, this.input);
 
         if (this.engine.isInShop) {
@@ -170,6 +175,11 @@ class Game {
 
     _updatePaused() {
         if (this.input.isPressed(GameAction.PAUSE)) {
+            this.changeState(GameState.PLAYING);
+            return;
+        }
+        if (this.input.isPressed(GameAction.RESTART)) {
+            this.engine.reset();
             this.changeState(GameState.PLAYING);
         }
     }
