@@ -71,7 +71,7 @@ class Game {
 
     draw() {
         // 游戏世界由 engine 绘制
-        if (this.state === GameState.PLAYING || this.state === GameState.PAUSED) {
+        if (this.state === GameState.PLAYING || this.state === GameState.PAUSED || this.state === GameState.SHOP) {
             this.engine.draw(this.ctx);
         } else {
             // 菜单/结束状态：纯色背景
@@ -84,9 +84,6 @@ class Game {
             case GameState.MENU:
                 this._drawMenu();
                 break;
-            case GameState.SHOP:
-                // 商店画面由 engine 绘制
-                break;
             case GameState.PAUSED:
                 this._drawPauseOverlay();
                 break;
@@ -95,8 +92,8 @@ class Game {
                 break;
         }
 
-        // PLAYING状态下绘制HUD
-        if (this.state === GameState.PLAYING || this.state === GameState.PAUSED) {
+        // PLAYING/SHOP 状态下绘制HUD
+        if (this.state === GameState.PLAYING || this.state === GameState.PAUSED || this.state === GameState.SHOP) {
             this._drawHUD();
         }
     }
