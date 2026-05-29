@@ -9,19 +9,19 @@ document.body.appendChild(canvas);//将创建的canvas添加到body中
 var bgReady = false;
 var bgImage = new Image();
 bgImage.onload = function () {bgReady = true;};
-bgImage.src = "pro132/images/background.png";
+bgImage.src = "assets/images/background.png";
 
 // 为英雄图像加载做好准备
 var heroReady = false;
 var heroImage = new Image();
 heroImage.onload = function () {	heroReady = true;};
-heroImage.src = "pro132/images/hero.png";
+heroImage.src = "assets/images/hero.png";
 
 // 加载怪物图像Monster
 var monsterReady = false;//定义怪物准备逻辑量
 var monsterImage = new Image(); //定义怪物图像
 monsterImage.onload = function () {	monsterReady = true;};//动态指派事件
-monsterImage.src = "pro132/images/monster.png";//给img的src属性赋值
+monsterImage.src = "assets/images/monster.png";//给img的src属性赋值
 
 // 游戏对象
 var hero = {

@@ -3,6 +3,8 @@
  *
  * 负责：WASD移动（带地图碰撞）、8方向射击、受伤无敌帧、升级属性。
  */
+const heroImg = new Image();
+heroImg.src = "assets/images/hero.png";
 
 class Player {
     constructor(x, y) {
@@ -319,27 +321,13 @@ class Player {
             ctx.fill();
         }
 
-        // 身体（绿色圆角矩形）
-        ctx.fillStyle = '#4CAF50';
-        this._fillRoundRect(ctx, x, y, this.size, this.size, 6);
-
-        // 帽子（棕色）
-        ctx.fillStyle = '#8D6E63';
-        ctx.fillRect(x + 4, y - 4, this.size - 8, 8);
-        ctx.fillRect(x + 2, y - 6, this.size - 4, 4);
-
-        // 眼睛（根据朝向偏移）
-        ctx.fillStyle = '#FFF';
-        const eyeOffset = this._getEyeOffset();
-        ctx.fillRect(x + 8 + eyeOffset.x, y + 10 + eyeOffset.y, 6, 6);
-        ctx.fillRect(x + 22 + eyeOffset.x, y + 10 + eyeOffset.y, 6, 6);
-        ctx.fillStyle = '#000';
-        ctx.fillRect(x + 10 + eyeOffset.x, y + 12 + eyeOffset.y, 2, 2);
-        ctx.fillRect(x + 24 + eyeOffset.x, y + 12 + eyeOffset.y, 2, 2);
-
-        // 枪（根据朝向）
-        ctx.fillStyle = '#5D4037';
-        this._drawGun(ctx, x, y);
+        // 使用 images 里的英雄图片
+        if (heroImg.complete) {
+            ctx.drawImage(heroImg, x, y, this.size, this.size);
+        } else {
+            ctx.fillStyle = '#4CAF50';
+            this._fillRoundRect(ctx, x, y, this.size, this.size, 6);
+        }
 
         ctx.restore();
     }
