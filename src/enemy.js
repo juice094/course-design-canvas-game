@@ -4,8 +4,6 @@
  * 参考C#源码设计：单 Enemy 类 + type 字段 + update() 内 switch 模式。
  * Phase 2 实现：Orc / Ogre / Mushroom 三种地面敌人。
  */
-const monsterImg = new Image();
-monsterImg.src = "assets/images/monster.png";
 
 const EnemyType = {
     ORC:      0,
@@ -326,18 +324,11 @@ class Enemy {
             ctx.globalAlpha = 0.5;
         }
 
-        if (monsterImg.complete) {
-            ctx.drawImage(
-                monsterImg,
-                x,
-                y,
-                this.size,
-                this.size
-            );
-        } else {
-            ctx.fillStyle = this.baseColor;
-            this._fillRoundRect(ctx, x, y, this.size, this.size, 4);
-        }
+        ctx.fillStyle = this.baseColor;
+        this._fillRoundRect(ctx, x, y, this.size, this.size, 4);
+
+        // 每种敌人的独特绘制
+        this._drawFeatures(ctx, x, y);
 
         ctx.restore();
     }
