@@ -28,6 +28,18 @@ class GameEngine {
         this.score = 0;
         this.waveNum = 0;
         this.isGameOver = false;
+        this.isLevelComplete = false;
+        this.hasWon = false;
+
+        // 关卡模式配置：endless=true 表示原来的无尽模式
+        this.levelMode = {
+            endless: true,
+            name: '无尽模式',
+            startWave: 1,
+            endWave: Infinity,
+            isFinal: false,
+            levelId: 0
+        };
 
         // Phase 7: 本局统计
         this.stats = {
@@ -59,8 +71,22 @@ class GameEngine {
         this.saveData = this._loadSave();
     }
 
-    /** 重置游戏 */
-    reset() {
+    /**
+     * 重置游戏。
+     * @param {{endless?: boolean, name?: string, startWave?: number, endWave?: number, isFinal?: boolean}} options
+     */
+    reset(options = {}) {
+        const startWave = options.startWave || 1;
+
+        this.levelMode = {
+            endless: options.endless !== false,
+            name: options.name || '无尽模式',
+            startWave: startWave,
+            endWave: options.endWave || Infinity,
+            isFinal: !!options.isFinal,
+            levelId: options.levelId || 0
+        };
+
         const spawn = this.map.findSafePosition();
         this.player = new Player(spawn.x, spawn.y);
         this.bullets = [];
@@ -69,10 +95,13 @@ class GameEngine {
         this.particles = [];
         this.coins = 0;
         this.score = 0;
-        this.waveNum = 0;
+        // waveNum 表示已经完成的波次；从第 N 波开始时，已完成 N - 1 波
+        this.waveNum = startWave - 1;
         this.isGameOver = false;
+        this.isLevelComplete = false;
+        this.hasWon = false;
         this.waveManager = new WaveManager();
-        this.waveManager.startWave(1);
+        this.waveManager.startWave(startWave);
         this.shop = new Shop();
         this.isInShop = false;
         this.audio.stopBGM();
@@ -141,7 +170,18 @@ class GameEngine {
         // 3. 波次管理器更新
         const waveResult = this.waveManager.update(dt, this);
         if (waveResult.waveComplete && !this.isInShop) {
-            this.waveNum++;
+            const completedWave = this.waveManager.waveNum;
+            this.waveNum = completedWave;
+
+            // 关卡模式：达到本关最后一波后，停止继续生成并通知主状态机
+            if (!this.levelMode.endless && completedWave >= this.levelMode.endWave) {
+                this.isLevelComplete = true;
+                this.hasWon = this.levelMode.isFinal;
+                this.enemies = [];
+                this.powerups = [];
+                return;
+            }
+
             if (waveResult.shouldShop) {
                 // Phase 4: 进入商店
                 this.isInShop = true;
@@ -387,12 +427,21 @@ class GameEngine {
         try {
             const raw = localStorage.getItem('prairieKingLite_save');
             if (raw) {
-                return JSON.parse(raw);
+                
+                const data = JSON.parse(raw);
+                return Object.assign({
+                    highScore: 0,
+                    highestWave: 0,
+                    totalCoinsEarned: 0,
+                    gamesPlayed: 0,
+                    highestClearedLevel: 0,
+                    unlockedLevel: 1
+                }, data);
             }
         } catch (e) {
             console.warn('Failed to load save:', e);
         }
-        return { highScore: 0, highestWave: 0, totalCoinsEarned: 0, gamesPlayed: 0 };
+        return { highScore: 0, highestWave: 0, totalCoinsEarned: 0, gamesPlayed: 0, highestClearedLevel: 0, unlockedLevel: 1 };
     }
 
     /**
@@ -411,6 +460,27 @@ class GameEngine {
      * 游戏结束时更新存档统计。
      * 比较本次成绩与历史最高，必要时刷新记录，然后调用 _saveSave() 持久化。
      */
+
+    /**
+     * 关卡通关时更新本地存档。
+     * @param {number} levelId — 已通关的关卡编号
+     */
+    updateSaveOnLevelComplete(levelId) {
+        const cleared = Math.max(0, levelId || 0);
+        if (cleared > this.saveData.highestClearedLevel) {
+            this.saveData.highestClearedLevel = cleared;
+        }
+        // 通关第 N 关后，解锁第 N+1 关；最多解锁到第 5 关
+        this.saveData.unlockedLevel = Math.max(this.saveData.unlockedLevel || 1, Math.min(cleared + 1, 5));
+        if (this.score > this.saveData.highScore) {
+            this.saveData.highScore = this.score;
+        }
+        if (this.waveNum > this.saveData.highestWave) {
+            this.saveData.highestWave = this.waveNum;
+        }
+        this._saveSave();
+    }
+
     updateSaveOnGameOver() {
         this.saveData.gamesPlayed++;
         this.saveData.totalCoinsEarned += this.coins;

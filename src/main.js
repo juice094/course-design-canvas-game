@@ -6,12 +6,23 @@
  */
 
 const GameState = {
-    MENU:     0,
-    PLAYING:  1,
-    SHOP:     2,
-    PAUSED:   3,
-    GAMEOVER: 4
+    MENU:        0,
+    PLAYING:     1,
+    SHOP:        2,
+    PAUSED:      3,
+    GAMEOVER:    4,
+    LEVEL_SELECT: 5,
+    LEVEL_CLEAR:  6,
+    WIN:          7
 };
+
+const LEVELS = [
+    { id: 1, name: '第一关 草原入口', startWave: 1, endWave: 3 },
+    { id: 2, name: '第二关 森林深处', startWave: 4, endWave: 6 },
+    { id: 3, name: '第三关 幽灵墓地', startWave: 7, endWave: 9 },
+    { id: 4, name: '第四关 恶魔荒原', startWave: 10, endWave: 12 },
+    { id: 5, name: '最终关 魔王城堡', startWave: 13, endWave: 15, isFinal: true }
+];
 
 class Game {
     constructor() {
@@ -57,6 +68,15 @@ class Game {
             case GameState.PLAYING:
                 this._updatePlaying(dt);
                 break;
+            case GameState.LEVEL_SELECT:
+                this._updateLevelSelect();
+                break;
+            case GameState.LEVEL_CLEAR:
+                this._updateLevelClear();
+                break;
+            case GameState.WIN:
+                this._updateWin();
+                break;
             case GameState.SHOP:
                 this._updateShop(dt);
                 break;
@@ -71,7 +91,7 @@ class Game {
 
     draw() {
         // 游戏世界由 engine 绘制
-        if (this.state === GameState.PLAYING || this.state === GameState.PAUSED || this.state === GameState.SHOP) {
+        if (this.state === GameState.PLAYING || this.state === GameState.PAUSED || this.state === GameState.SHOP || this.state === GameState.LEVEL_CLEAR || this.state === GameState.WIN) {
             this.engine.draw(this.ctx);
         } else {
             // 菜单/结束状态：纯色背景
@@ -84,16 +104,25 @@ class Game {
             case GameState.MENU:
                 this._drawMenu();
                 break;
+            case GameState.LEVEL_SELECT:
+                this._drawLevelSelect();
+                break;
             case GameState.PAUSED:
                 this._drawPauseOverlay();
                 break;
             case GameState.GAMEOVER:
                 this._drawGameOver();
                 break;
+            case GameState.LEVEL_CLEAR:
+                this._drawLevelClear();
+                break;
+            case GameState.WIN:
+                this._drawWin();
+                break;
         }
 
         // PLAYING/SHOP 状态下绘制HUD
-        if (this.state === GameState.PLAYING || this.state === GameState.PAUSED || this.state === GameState.SHOP) {
+        if (this.state === GameState.PLAYING || this.state === GameState.PAUSED || this.state === GameState.SHOP || this.state === GameState.LEVEL_CLEAR || this.state === GameState.WIN) {
             this._drawHUD();
         }
     }
@@ -101,15 +130,15 @@ class Game {
     // ---------- 菜单 ----------
 
     _updateMenu() {
-        if (this.input.isPressed(GameAction.CONFIRM) || this.input.isPressed(GameAction.USE_POWERUP)) {
-            if (!this.audioInitialized) {
-                this.engine.audio.init();
-                this.audioInitialized = true;
-            }
-            this.engine.audio.resume();
-            this.engine.reset();
-            this.engine.audio.startBGM();
-            this.changeState(GameState.PLAYING);
+        // 1：从第1波开始，保留原来的无尽模式
+        if (this.input.keysPressed.has('Digit1') || this.input.isPressed(GameAction.CONFIRM) || this.input.isPressed(GameAction.USE_POWERUP)) {
+            this._startEndlessGame();
+            return;
+        }
+
+        // 2：进入选关界面
+        if (this.input.keysPressed.has('Digit2')) {
+            this.changeState(GameState.LEVEL_SELECT);
         }
     }
 
@@ -136,14 +165,14 @@ class Game {
         const s = this.engine.saveData;
         ctx.fillStyle = '#AAA';
         ctx.font = '12px "Courier New", monospace';
-        ctx.fillText(`最高分: ${s.highScore}  最高波次: ${s.highestWave}  游戏次数: ${s.gamesPlayed}`, cx, cy + 85);
+        ctx.fillText(`最高分: ${s.highScore}  最高波次: ${s.highestWave}  已通关: 第${s.highestClearedLevel || 0}关`, cx, cy + 85);
 
-        const blink = Math.sin(performance.now() / 300) > 0;
-        if (blink) {
-            ctx.fillStyle = '#4CAF50';
-            ctx.font = 'bold 20px "Courier New", monospace';
-            ctx.fillText('按 SPACE 开始游戏', cx, cy + 120);
-        }
+        ctx.fillStyle = '#4CAF50';
+        ctx.font = 'bold 20px "Courier New", monospace';
+        ctx.fillText('1 / SPACE  从第1波开始', cx, cy + 120);
+
+        ctx.fillStyle = '#4FC3F7';
+        ctx.fillText('2  选择关卡', cx, cy + 150);
     }
 
     // ---------- 游戏 ----------
@@ -166,6 +195,15 @@ class Game {
             return;
         }
 
+        if (this.engine.isLevelComplete) {
+            if (!this.engine.levelMode.endless) {
+                this.engine.updateSaveOnLevelComplete(this.engine.levelMode.levelId);
+            }
+            this.engine.audio.stopBGM();
+            this.changeState(this.engine.hasWon ? GameState.WIN : GameState.LEVEL_CLEAR);
+            return;
+        }
+
         if (this.engine.isGameOver) {
             this.engine.updateSaveOnGameOver();
             this.engine.audio.stopBGM();
@@ -177,9 +215,164 @@ class Game {
 
     _updateShop(dt) {
         this.engine.update(dt, this.input);
+        if (this.engine.isLevelComplete) {
+            if (!this.engine.levelMode.endless) {
+                this.engine.updateSaveOnLevelComplete(this.engine.levelMode.levelId);
+            }
+            this.engine.audio.stopBGM();
+            this.changeState(this.engine.hasWon ? GameState.WIN : GameState.LEVEL_CLEAR);
+            return;
+        }
         if (!this.engine.isInShop) {
             this.changeState(GameState.PLAYING);
         }
+    }
+
+    // ---------- 选关 ----------
+
+    _startEndlessGame() {
+        if (!this.audioInitialized) {
+            this.engine.audio.init();
+            this.audioInitialized = true;
+        }
+        this.engine.audio.resume();
+        this.engine.reset({ endless: true, name: '无尽模式', startWave: 1 });
+        this.engine.audio.startBGM();
+        this.changeState(GameState.PLAYING);
+    }
+
+    _startLevel(level) {
+        if (!this.audioInitialized) {
+            this.engine.audio.init();
+            this.audioInitialized = true;
+        }
+        this.engine.audio.resume();
+        this.engine.reset({
+            endless: false,
+            name: level.name,
+            startWave: level.startWave,
+            endWave: level.endWave,
+            isFinal: !!level.isFinal,
+            levelId: level.id
+        });
+        this.engine.audio.startBGM();
+        this.changeState(GameState.PLAYING);
+    }
+
+    _updateLevelSelect() {
+        if (this.input.isPressed(GameAction.PAUSE)) {
+            this.changeState(GameState.MENU);
+            return;
+        }
+
+        for (let i = 0; i < LEVELS.length; i++) {
+            if (this.input.keysPressed.has(`Digit${i + 1}`)) {
+                const unlocked = this.engine.saveData.unlockedLevel || 1;
+                if (LEVELS[i].id <= unlocked) {
+                    this._startLevel(LEVELS[i]);
+                }
+                return;
+            }
+        }
+    }
+
+    _drawLevelSelect() {
+        const ctx = this.ctx;
+        const cx = this.width / 2;
+
+        ctx.fillStyle = '#FFE082';
+        ctx.font = 'bold 38px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('选择关卡', cx, 70);
+
+        ctx.fillStyle = '#AAA';
+        ctx.font = '14px "Courier New", monospace';
+        ctx.fillText('每关包含 3 波敌人，通关最后一关后获得胜利', cx, 110);
+
+        const unlocked = this.engine.saveData.unlockedLevel || 1;
+        const cleared = this.engine.saveData.highestClearedLevel || 0;
+
+        ctx.textAlign = 'left';
+        ctx.font = '18px "Courier New", monospace';
+        for (let i = 0; i < LEVELS.length; i++) {
+            const level = LEVELS[i];
+            const y = 160 + i * 46;
+            const isUnlocked = level.id <= unlocked;
+            const isCleared = level.id <= cleared;
+
+            ctx.fillStyle = isUnlocked ? (level.isFinal ? '#FFB74D' : '#4FC3F7') : '#666';
+            ctx.fillText(`${i + 1}. ${level.name}`, 90, y);
+
+            ctx.fillStyle = isUnlocked ? '#DDD' : '#777';
+            ctx.fillText(`WAVE ${level.startWave} - ${level.endWave}`, 340, y);
+
+            ctx.fillStyle = isCleared ? '#4CAF50' : (isUnlocked ? '#FFE082' : '#888');
+            ctx.fillText(isCleared ? '已通关' : (isUnlocked ? '已解锁' : '未解锁'), 470, y);
+        }
+
+        ctx.fillStyle = '#CCC';
+        ctx.font = '16px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('按已解锁关卡的数字开始，ESC 返回主菜单', cx, this.height - 60);
+    }
+
+    _updateLevelClear() {
+        if (this.input.isPressed(GameAction.CONFIRM) || this.input.isPressed(GameAction.USE_POWERUP)) {
+            this.changeState(GameState.LEVEL_SELECT);
+        }
+    }
+
+    _drawLevelClear() {
+        const ctx = this.ctx;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+        ctx.fillRect(0, 0, this.width, this.height);
+
+        const cx = this.width / 2;
+        const cy = this.height / 2;
+        ctx.fillStyle = '#4CAF50';
+        ctx.font = 'bold 38px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('关卡通过！', cx, cy - 50);
+
+        ctx.fillStyle = '#FFE082';
+        ctx.font = '20px "Courier New", monospace';
+        ctx.fillText(this.engine.levelMode.name, cx, cy - 5);
+
+        ctx.fillStyle = '#DDD';
+        ctx.font = '16px "Courier New", monospace';
+        ctx.fillText(`得分: ${this.engine.score}   金币: $${this.engine.coins}`, cx, cy + 35);
+        ctx.fillText('按 SPACE 返回选关', cx, cy + 75);
+    }
+
+    _updateWin() {
+        if (this.input.isPressed(GameAction.CONFIRM) || this.input.isPressed(GameAction.USE_POWERUP)) {
+            this.changeState(GameState.MENU);
+        }
+    }
+
+    _drawWin() {
+        const ctx = this.ctx;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.76)';
+        ctx.fillRect(0, 0, this.width, this.height);
+
+        const cx = this.width / 2;
+        const cy = this.height / 2;
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 42px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('恭喜通关！', cx, cy - 55);
+
+        ctx.fillStyle = '#FFF';
+        ctx.font = '20px "Courier New", monospace';
+        ctx.fillText('你已经完成全部关卡', cx, cy - 5);
+
+        ctx.fillStyle = '#DDD';
+        ctx.font = '16px "Courier New", monospace';
+        ctx.fillText(`最终得分: ${this.engine.score}   完成波次: ${this.engine.waveNum}`, cx, cy + 35);
+        ctx.fillText('按 SPACE 返回主菜单', cx, cy + 75);
     }
 
     // ---------- 暂停 ----------
@@ -304,6 +497,12 @@ class Game {
             ctx.fillStyle = '#AAA';
             ctx.font = '12px "Courier New", monospace';
             ctx.fillText(`${waveInfo.spawned}/${waveInfo.total}`, this.width - 16, 34);
+        }
+        if (!this.engine.levelMode.endless) {
+            ctx.fillStyle = '#4FC3F7';
+            ctx.font = '12px "Courier New", monospace';
+            ctx.fillText(this.engine.levelMode.name, this.width - 16, 52);
+            ctx.fillText(`目标: WAVE ${this.engine.levelMode.endWave}`, this.width - 16, 68);
         }
 
         // 道具计时器
